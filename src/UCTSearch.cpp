@@ -411,6 +411,10 @@ bool UCTSearch::should_resign(passflag_t passflag, float besteval) {
         }
     }
 
+    if (!m_rootstate.is_move_legal(color, FastBoard::RESIGN)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -512,8 +516,10 @@ int UCTSearch::get_best_move(passflag_t passflag) {
             // We didn't consider passing. Should we have and
             // end the game immediately?
 
+            if (!m_rootstate.is_move_legal(color, FastBoard::PASS)) {
+                myprintf("Passing is forbidden, I'll play on.\n");
             // do we lose by passing?
-            if (relative_score < 0.0f) {
+            } else if (relative_score < 0.0f) {
                 myprintf("Passing loses, I'll play on.\n");
             } else if (relative_score > 0.0f) {
                 myprintf("Passing wins, I'll pass out.\n");
