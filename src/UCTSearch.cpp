@@ -418,6 +418,10 @@ bool UCTSearch::should_resign(passflag_t passflag, float besteval) {
         }
     }
 
+    if (!m_rootstate.is_move_legal(color, FastBoard::RESIGN)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -519,8 +523,10 @@ int UCTSearch::get_best_move(passflag_t passflag) {
             // We didn't consider passing. Should we have and
             // end the game immediately?
 
+            if (!m_rootstate.is_move_legal(color, FastBoard::PASS)) {
+                myprintf("Passing is forbidden, I'll play on.\n");
             // do we lose by passing?
-            if (relative_score < 0.0f) {
+            } else if (relative_score < 0.0f) {
                 myprintf("Passing loses, I'll play on.\n");
             } else if (relative_score > 0.0f) {
                 myprintf("Passing wins, I'll pass out.\n");
@@ -738,8 +744,8 @@ int UCTSearch::think(int color, passflag_t passflag) {
         Time elapsed;
         int elapsed_centis = Time::timediff_centis(start, elapsed);
 
-        if (cfg_analyze_interval_centis &&
-            elapsed_centis - last_output > cfg_analyze_interval_centis) {
+        if (cfg_analyze_tags.m_interval_centis &&
+            elapsed_centis - last_output > cfg_analyze_tags.m_interval_centis) {
             last_output = elapsed_centis;
             output_analysis(m_rootstate, *m_root);
         }
@@ -789,6 +795,12 @@ int UCTSearch::think(int color, passflag_t passflag) {
 }
 
 void UCTSearch::ponder() {
+    auto disable_reuse = !cfg_analyze_tags.m_moves_to_avoid.empty() ||
+                         !cfg_analyze_tags.m_moves_to_allow.empty();
+    if (disable_reuse) {
+        m_last_rootstate.reset(nullptr);
+    }
+
     update_root();
 
     m_root->prepare_root_node(m_network, m_rootstate.board.get_to_move(),
@@ -808,10 +820,10 @@ void UCTSearch::ponder() {
         if (result.valid()) {
             increment_playouts();
         }
-        if (cfg_analyze_interval_centis) {
+        if (cfg_analyze_tags.m_interval_centis) {
             Time elapsed;
             int elapsed_centis = Time::timediff_centis(start, elapsed);
-            if (elapsed_centis - last_output > cfg_analyze_interval_centis) {
+            if (elapsed_centis - last_output > cfg_analyze_tags.m_interval_centis) {
                 last_output = elapsed_centis;
                 output_analysis(m_rootstate, *m_root);
             }
@@ -831,7 +843,9 @@ void UCTSearch::ponder() {
     myprintf("\n%d visits, %d nodes\n\n", m_root->get_visits(), m_nodes.load());
 
     // Copy the root state. Use to check for tree re-use in future calls.
-    m_last_rootstate = std::make_unique<GameState>(m_rootstate);
+    if (!disable_reuse) {
+        m_last_rootstate = std::make_unique<GameState>(m_rootstate);
+    }
 }
 
 void UCTSearch::set_playout_limit(int playouts) {
