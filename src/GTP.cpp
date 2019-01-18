@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 
 #include "GTP.h"
 #include "FastBoard.h"
@@ -87,6 +88,12 @@ AnalyzeTags cfg_analyze_tags;
 /* Parses tags for the lz-analyze GTP command and friends */
 AnalyzeTags::AnalyzeTags(std::istringstream& cmdstream, const GameState& game) {
     std::string tag;
+
+    if (!cfg_analyze_tags.m_invalid && cfg_analyze_tags.m_cli_option.size()) {
+        std::cerr << "Analyze options from command line option cannot be overridden. Only the genmove command can be used (and lz-analyze cannot)." << std::endl;
+        return;
+    }
+    m_cli_option = cfg_analyze_tags.m_cli_option;
 
     /* Default color is the current one */
     m_who = game.board.get_to_move();
@@ -207,6 +214,27 @@ AnalyzeTags::AnalyzeTags(std::istringstream& cmdstream, const GameState& game) {
                  * move that is not "pass" or "resign". */
                 return;
             }
+        } else if (tag == "avoid-opening") {
+            size_t opening_length;
+            cmdstream >> opening_length;
+            std::string dirpath, tmp;
+            cmdstream >> tmp;
+            int maxcount=1;
+            if (tmp.find("max=") == 0) {
+                tmp = tmp.substr(4);
+                try {
+                    maxcount = std::stoi(tmp);
+                } catch(...) {
+                    return;
+                }
+                cmdstream >> dirpath;
+            } else {
+                dirpath = tmp;
+            }
+            if (cmdstream.fail()) {
+                return;
+            }
+            read_openings(dirpath, opening_length, maxcount);
         } else if (tag == "w" || tag == "white") {
             m_who = FastBoard::WHITE;
         } else if (tag == "b" || tag == "black") {
@@ -426,6 +454,48 @@ std::string GTP::get_life_list(const GameState & game, bool live) {
     }
 
     return result;
+}
+
+void AnalyzeTags::read_openings(std::string dirpath, size_t opening_length, int maxcount) {
+    std::map<uint64_t, int> opngmap;
+    std::map<uint64_t, std::string> reprs;
+
+    for(auto& ent: boost::filesystem::directory_iterator(dirpath)) {
+        auto path = ent.path().string();
+        auto ext = path.substr(path.find_last_of('.'));
+        if (ext != ".sgf" && ext != ".SGF" && ext != ".Sgf") {
+            continue;
+        }
+        auto sgftree = std::make_unique<SGFTree>();
+        sgftree->load_from_file(path);
+        auto game = sgftree->follow_mainline_state(opening_length);
+
+        auto idhash = game.get_symmetry_hash(Network::IDENTITY_SYMMETRY);
+        if (opngmap.find(idhash) == opngmap.end()) {
+            reprs[idhash] = game.board.get_stone_list();
+        }
+        for (int sym=0; sym < Network::NUM_SYMMETRIES; sym++) {
+            auto hash = game.get_symmetry_hash(sym);
+            if (sym != Network::IDENTITY_SYMMETRY && hash == idhash) {
+                continue;
+            }
+            auto found = opngmap.insert(std::pair<uint64_t, int>(hash, 0));
+            found.first->second++;
+        }
+    }
+
+    for (auto x : opngmap) {
+            auto hash = x.first;
+            auto count = x.second;
+        if (count >= maxcount) {
+            m_openings.emplace_back(hash);
+            if (reprs.find(hash) != reprs.end()) {
+                std::cerr << "Added a known opening: " << reprs[hash] << std::endl;
+            }
+        }
+    }
+    m_opening_length = opening_length;
+    std::cerr << "Read " << m_openings.size() << " openings (including symmetries) from " << dirpath << std::endl;
 }
 
 void GTP::execute(GameState & game, const std::string& xinput) {
@@ -649,7 +719,9 @@ void GTP::execute(GameState & game, const std::string& xinput) {
             // Terminate multi-line response
             gtp_printf_raw("\n");
         }
-        cfg_analyze_tags = {};
+        if (!cfg_analyze_tags.m_cli_option.size()) {
+            cfg_analyze_tags = {};
+        }
         return;
     } else if (command.find("lz-analyze") == 0) {
         std::istringstream cmdstream(command);

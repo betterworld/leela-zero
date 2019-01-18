@@ -59,6 +59,21 @@ public:
     bool is_to_avoid(int color, int vertex, size_t movenum) const;
     bool has_move_restrictions() const;
 
+    void read_openings(std::string dirpath, size_t opening_length, int maxcount);
+
+    size_t m_opening_length{0};
+    std::vector<uint64_t> m_openings;
+    std::string m_cli_option;
+
+    bool has_opening(FastState& state) {
+        auto hash = state.get_symmetry_hash(Network::IDENTITY_SYMMETRY);
+        return has_opening(hash);
+    }
+
+    bool has_opening(uint64_t hash) {
+        return find(m_openings.begin(), m_openings.end(), hash) != m_openings.end();
+    }
+
 private:
     bool m_invalid{true};
     std::vector<MoveToAvoid> m_moves_to_avoid, m_moves_to_allow;

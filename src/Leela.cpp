@@ -83,6 +83,9 @@ static void parse_commandline(int argc, char *argv[]) {
         ("benchmark", "Test network and exit. Default args:\n-v3200 --noponder "
                       "-m0 -t1 -s1.")
         ("cpu-only", "Use CPU-only implementation and do not use GPU.")
+        ("analyze-tags", po::value<std::string>(),
+                         "Make 'genmove' apply these tags like 'lz-analyze'\n"
+                         "Ex: \"--analyze-tags 'avoid-opening 10 sgfdir/'")
         ;
 #ifdef USE_OPENCL
     po::options_description gpu_desc("GPU options");
@@ -276,6 +279,10 @@ static void parse_commandline(int argc, char *argv[]) {
         cfg_cpu_only = true;
     }
 
+    if (vm.count("analyze-tags")) {
+        cfg_analyze_tags.m_cli_option = vm["analyze-tags"].as<std::string>();
+    }
+
     if (vm.count("playouts")) {
         cfg_max_playouts = vm["playouts"].as<int>();
         if (!vm.count("noponder")) {
@@ -435,6 +442,15 @@ int main(int argc, char *argv[]) {
     /* set board limits */
     auto komi = 7.5f;
     maingame->init_game(BOARD_SIZE, komi);
+
+    if (cfg_analyze_tags.m_cli_option.size()) {
+        std::istringstream s(cfg_analyze_tags.m_cli_option);
+        cfg_analyze_tags = AnalyzeTags{s, *maingame};
+        if (cfg_analyze_tags.invalid()) {
+            printf("Cannot parse '--analyze-tags' option\n");
+            exit(EXIT_FAILURE);
+        }
+    }
 
     if (cfg_benchmark) {
         cfg_quiet = false;

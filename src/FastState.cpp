@@ -63,12 +63,24 @@ void FastState::reset_board() {
 }
 
 bool FastState::is_move_legal(int color, int vertex) const {
-    return !cfg_analyze_tags.is_to_avoid(color, vertex, m_movenum) && (
-              vertex == FastBoard::PASS ||
-                 vertex == FastBoard::RESIGN ||
-                 (vertex != m_komove &&
-                      board.get_state(vertex) == FastBoard::EMPTY &&
-                      !board.is_suicide(vertex, color)));
+    if (vertex == FastBoard::RESIGN || vertex == FastBoard::PASS) {
+        return !cfg_analyze_tags.is_to_avoid(color, vertex, m_movenum);
+    } else {
+        if (vertex == m_komove ||
+                board.get_state(vertex) != FastBoard::EMPTY ||
+                board.is_suicide(vertex, color)) {
+            return false;
+        }
+        if (m_movenum == cfg_analyze_tags.m_opening_length-1 && !cfg_analyze_tags.m_openings.empty()) {
+            FastState st(*this);
+            st.play_move(color, vertex);
+            if (cfg_analyze_tags.has_opening(st)) {
+                // std::cerr << "Not allowing move " << st.move_to_text(vertex) << " as move " << m_movenum << std::endl;
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 void FastState::play_move(int vertex) {
