@@ -83,9 +83,9 @@ static void parse_commandline(int argc, char *argv[]) {
         ("benchmark", "Test network and exit. Default args:\n-v3200 --noponder "
                       "-m0 -t1 -s1.")
         ("cpu-only", "Use CPU-only implementation and do not use GPU.")
-        ("analyze-tags", po::value<std::string>(),
-                         "Make 'genmove' apply these tags like 'lz-analyze'\n"
-                         "Ex: \"--analyze-tags 'avoid-opening 10 sgfdir/'")
+        ("avoid-opening-dir", po::value<std::string>(), "Read openings to avoid from SGF files in this directory")
+        ("avoid-opening-length", po::value<size_t>(), "Length of the opening (number of moves to read from the SGFs)")
+        ("avoid-opening-maxcount", po::value<int>(), "Only avoid openings that appear more than N times in the SGFs (where N is the number specified)")
         ;
 #ifdef USE_OPENCL
     po::options_description gpu_desc("GPU options");
@@ -279,8 +279,13 @@ static void parse_commandline(int argc, char *argv[]) {
         cfg_cpu_only = true;
     }
 
-    if (vm.count("analyze-tags")) {
-        cfg_analyze_tags.m_cli_option = vm["analyze-tags"].as<std::string>();
+    if (vm.count("avoid-opening-dir")) {
+        std::string path = vm["avoid-opening-dir"].as<std::string>();
+        size_t movenum = 10;
+        int maxcount = 1;
+        if (vm.count("avoid-opening-length"))  movenum  = vm["avoid-opening-length"].as<size_t>();
+        if (vm.count("avoid-opening-maxcount")) maxcount = vm["avoid-opening-maxcount"].as<int>();
+        cfg_avoid_opening = {path, movenum, maxcount};
     }
 
     if (vm.count("playouts")) {
@@ -443,14 +448,7 @@ int main(int argc, char *argv[]) {
     auto komi = 7.5f;
     maingame->init_game(BOARD_SIZE, komi);
 
-    if (cfg_analyze_tags.m_cli_option.size()) {
-        std::istringstream s(cfg_analyze_tags.m_cli_option);
-        cfg_analyze_tags = AnalyzeTags{s, *maingame};
-        if (cfg_analyze_tags.invalid()) {
-            printf("Cannot parse '--analyze-tags' option\n");
-            exit(EXIT_FAILURE);
-        }
-    }
+    cfg_avoid_opening.read_openings();
 
     if (cfg_benchmark) {
         cfg_quiet = false;

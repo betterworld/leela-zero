@@ -786,8 +786,7 @@ int UCTSearch::think(int color, passflag_t passflag) {
 }
 
 void UCTSearch::ponder() {
-    auto disable_reuse = cfg_analyze_tags.has_move_restrictions() ||
-                         !cfg_analyze_tags.m_openings.empty();
+    auto disable_reuse = cfg_analyze_tags.has_move_restrictions();
     if (disable_reuse) {
         m_last_rootstate.reset(nullptr);
     }

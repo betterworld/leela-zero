@@ -59,13 +59,26 @@ public:
     bool is_to_avoid(int color, int vertex, size_t movenum) const;
     bool has_move_restrictions() const;
 
-    void read_openings(std::string dirpath, size_t opening_length, int maxcount);
+private:
+    bool m_invalid{true};
+    std::vector<MoveToAvoid> m_moves_to_avoid, m_moves_to_allow;
+    int m_interval_centis{0};
+    int m_who{FastBoard::INVAL};
+};
 
-    size_t m_opening_length{0};
-    std::vector<uint64_t> m_openings;
-    std::string m_cli_option;
+class OpeningsToAvoid {
+public:
+    OpeningsToAvoid() = default;
+    OpeningsToAvoid(std::string dirpath, size_t opening_length, int maxcount)
+        : m_dirpath(dirpath), m_opening_length(opening_length), m_maxcount(maxcount)
+    {}
+
+    void read_openings();
 
     bool has_opening(FastState& state) {
+        // check if read_openings() has been called during initialization
+        assert((m_dirpath.size() == 0) == m_openings.size() == 0);
+
         auto hash = state.get_symmetry_hash(Network::IDENTITY_SYMMETRY);
         return has_opening(hash);
     }
@@ -74,11 +87,15 @@ public:
         return find(m_openings.begin(), m_openings.end(), hash) != m_openings.end();
     }
 
+    bool applies_to_move(size_t movenum) {
+        return !m_openings.empty() && movenum == m_opening_length-1;
+    }
+
 private:
-    bool m_invalid{true};
-    std::vector<MoveToAvoid> m_moves_to_avoid, m_moves_to_allow;
-    int m_interval_centis{0};
-    int m_who{FastBoard::INVAL};
+    std::string m_dirpath;
+    size_t m_opening_length;
+    int m_maxcount;
+    std::vector<uint64_t> m_openings;
 };
 
 extern bool cfg_gtp_mode;
@@ -121,6 +138,7 @@ extern std::string cfg_options_str;
 extern bool cfg_benchmark;
 extern bool cfg_cpu_only;
 extern AnalyzeTags cfg_analyze_tags;
+extern OpeningsToAvoid cfg_avoid_opening;
 
 static constexpr size_t MiB = 1024LL * 1024LL;
 

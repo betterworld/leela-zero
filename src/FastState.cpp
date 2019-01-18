@@ -71,10 +71,10 @@ bool FastState::is_move_legal(int color, int vertex) const {
                 board.is_suicide(vertex, color)) {
             return false;
         }
-        if (m_movenum == cfg_analyze_tags.m_opening_length-1 && !cfg_analyze_tags.m_openings.empty()) {
+        if (cfg_avoid_opening.applies_to_move(m_movenum)) {
             FastState st(*this);
             st.play_move(color, vertex);
-            if (cfg_analyze_tags.has_opening(st)) {
+            if (cfg_avoid_opening.has_opening(st)) {
                 // std::cerr << "Not allowing move " << st.move_to_text(vertex) << " as move " << m_movenum << std::endl;
                 return false;
             }
